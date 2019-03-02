@@ -1,0 +1,869 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## My Sportify - Music Recommendation System -"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "#### 2019-01-09 Wed"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 123,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "members.csv\n",
+      "sample_submission.csv\n",
+      "song_extra_info.csv\n",
+      "songs.csv\n",
+      "test.csv\n",
+      "train.csv\n",
+      "\n"
+     ]
+    }
+   ],
+   "source": [
+    "# Let's get started !\n",
+    "\n",
+    "import numpy as np\n",
+    "import pandas as pd\n",
+    "import matplotlib.pyplot as plt\n",
+    "import lightgbm as lgb\n",
+    "import datetime\n",
+    "import math\n",
+    "import gc\n",
+    "\n",
+    "from subprocess import check_output\n",
+    "print(check_output([\"ls\", \"../KKBox\"]).decode(\"utf8\"))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "metadata": {},
+   "outputs": [
+    {
+     "ename": "NameError",
+     "evalue": "name 'pd' is not defined",
+     "output_type": "error",
+     "traceback": [
+      "\u001b[0;31m---------------------------------------------------------------------------\u001b[0m",
+      "\u001b[0;31mNameError\u001b[0m                                 Traceback (most recent call last)",
+      "\u001b[0;32m<ipython-input-1-63dd5ab95374>\u001b[0m in \u001b[0;36m<module>\u001b[0;34m\u001b[0m\n\u001b[1;32m      2\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m      3\u001b[0m \u001b[0mpath\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0;34m'../KKBox/'\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m----> 4\u001b[0;31m \u001b[0mtrain\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mpd\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mread_csv\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mpath\u001b[0m \u001b[0;34m+\u001b[0m \u001b[0;34m\"train.csv\"\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m      5\u001b[0m \u001b[0mtest\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mpd\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mread_csv\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mpath\u001b[0m \u001b[0;34m+\u001b[0m \u001b[0;34m\"test.csv\"\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m      6\u001b[0m \u001b[0msongs\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mpd\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mread_csv\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mpath\u001b[0m \u001b[0;34m+\u001b[0m \u001b[0;34m\"songs.csv\"\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;31mNameError\u001b[0m: name 'pd' is not defined"
+     ]
+    }
+   ],
+   "source": [
+    "# Create DataFrane from KKBox's CSV fsiles\n",
+    "\n",
+    "path = '../KKBox/'\n",
+    "train = pd.read_csv(path + \"train.csv\")\n",
+    "test = pd.read_csv(path + \"test.csv\")\n",
+    "songs = pd.read_csv(path + \"songs.csv\")\n",
+    "members = pd.read_csv(path + \"members.csv\")\n",
+    "song_extra_info = pd.read_csv(path + \"song_extra_info.csv\")\n",
+    "print(\"Done Loading...\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 126,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "-----train-----\n",
+      "(7377418, 6) Index(['msno', 'song_id', 'source_system_tab', 'source_screen_name',\n",
+      "       'source_type', 'target'],\n",
+      "      dtype='object')\n",
+      "\n",
+      "-----test-----\n",
+      "(2556790, 6) Index(['id', 'msno', 'song_id', 'source_system_tab', 'source_screen_name',\n",
+      "       'source_type'],\n",
+      "      dtype='object')\n",
+      "\n",
+      "-----songs-----\n",
+      "(2296320, 7) Index(['song_id', 'song_length', 'genre_ids', 'artist_name', 'composer',\n",
+      "       'lyricist', 'language'],\n",
+      "      dtype='object')\n",
+      "\n",
+      "-----members-----\n",
+      "(34403, 7) Index(['msno', 'city', 'bd', 'gender', 'registered_via',\n",
+      "       'registration_init_time', 'expiration_date'],\n",
+      "      dtype='object')\n",
+      "\n",
+      "-----song_extra_info-----\n",
+      "(2295971, 3) Index(['song_id', 'name', 'isrc'], dtype='object')\n"
+     ]
+    }
+   ],
+   "source": [
+    "# Checking general infos of each DataFrame\n",
+    "\n",
+    "print(\"-----train-----\")\n",
+    "print(train.shape, train.columns)\n",
+    "print(\"\\n-----test-----\")\n",
+    "print(test.shape, test.columns)\n",
+    "print(\"\\n-----songs-----\")\n",
+    "print(songs.shape, songs.columns)\n",
+    "print(\"\\n-----members-----\")\n",
+    "print(members.shape, members.columns)\n",
+    "print(\"\\n-----song_extra_info-----\")\n",
+    "print(song_extra_info.shape, song_extra_info.columns)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### Data1. training data"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 127,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "UserID    0\n",
+      "SongID    0\n",
+      "Target    0\n",
+      "dtype: int64\n"
+     ]
+    },
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>UserID</th>\n",
+       "      <th>SongID</th>\n",
+       "      <th>Target</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <th>0</th>\n",
+       "      <td>FGtllVqz18RPiwJj/edr2gV78zirAiY/9SmYvia+kCg=</td>\n",
+       "      <td>BBzumQNXUHKdEBOB7mAJuzok+IJA1c2Ryg/yzTF6tik=</td>\n",
+       "      <td>1</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>1</th>\n",
+       "      <td>Xumu+NIjS6QYVxDS4/t3SawvJ7viT9hPKXmf0RtLNx8=</td>\n",
+       "      <td>bhp/MpSNoqoxOIB+/l8WPqu6jldth4DIpCm3ayXnJqM=</td>\n",
+       "      <td>1</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>2</th>\n",
+       "      <td>Xumu+NIjS6QYVxDS4/t3SawvJ7viT9hPKXmf0RtLNx8=</td>\n",
+       "      <td>JNWfrrC7zNN7BdMpsISKa4Mw+xVJYNnxXh3/Epw7QgY=</td>\n",
+       "      <td>1</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "                                         UserID  \\\n",
+       "0  FGtllVqz18RPiwJj/edr2gV78zirAiY/9SmYvia+kCg=   \n",
+       "1  Xumu+NIjS6QYVxDS4/t3SawvJ7viT9hPKXmf0RtLNx8=   \n",
+       "2  Xumu+NIjS6QYVxDS4/t3SawvJ7viT9hPKXmf0RtLNx8=   \n",
+       "\n",
+       "                                         SongID  Target  \n",
+       "0  BBzumQNXUHKdEBOB7mAJuzok+IJA1c2Ryg/yzTF6tik=       1  \n",
+       "1  bhp/MpSNoqoxOIB+/l8WPqu6jldth4DIpCm3ayXnJqM=       1  \n",
+       "2  JNWfrrC7zNN7BdMpsISKa4Mw+xVJYNnxXh3/Epw7QgY=       1  "
+      ]
+     },
+     "execution_count": 127,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "# Drop irrevarent features for recommendation\n",
+    "# Rename name of columns as you like\n",
+    "# This data doesn't have any null value (exelent!)\n",
+    "\n",
+    "train.drop(labels=[\"source_system_tab\", \"source_screen_name\", \"source_type\"], axis=1, inplace=True)\n",
+    "train.columns = [\"UserID\", \"SongID\", \"Target\"]\n",
+    "print(train.isnull().sum())\n",
+    "train.head(3)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 139,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "UserID     30755\n",
+       "SongID    359966\n",
+       "Target         2\n",
+       "dtype: int64"
+      ]
+     },
+     "execution_count": 139,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "# The number of unique user is 30,755\n",
+    "# The number of unique song is 359,966\n",
+    "\n",
+    "train.nunique()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### Data2. songs data"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 140,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "SongID          0\n",
+      "Language        1\n",
+      "Artist          0\n",
+      "Category    94116\n",
+      "Length          0\n",
+      "dtype: int64\n"
+     ]
+    },
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>SongID</th>\n",
+       "      <th>Language</th>\n",
+       "      <th>Artist</th>\n",
+       "      <th>Category</th>\n",
+       "      <th>Length</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <th>0</th>\n",
+       "      <td>CXoTN1eb7AI+DntdU1vbcwGRV4SCIDxZu+YD8JP8r4E=</td>\n",
+       "      <td>3.0</td>\n",
+       "      <td>張信哲 (Jeff Chang)</td>\n",
+       "      <td>465</td>\n",
+       "      <td>247640</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>1</th>\n",
+       "      <td>o0kFgae9QtnYgRkVPqLJwa05zIhRlUjfF7O1tDw0ZDU=</td>\n",
+       "      <td>31.0</td>\n",
+       "      <td>BLACKPINK</td>\n",
+       "      <td>444</td>\n",
+       "      <td>197328</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>2</th>\n",
+       "      <td>DwVvVurfpuz+XPuFvucclVQEyPqcpUkHR0ne1RQzPs0=</td>\n",
+       "      <td>31.0</td>\n",
+       "      <td>SUPER JUNIOR</td>\n",
+       "      <td>465</td>\n",
+       "      <td>231781</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "                                         SongID  Language            Artist  \\\n",
+       "0  CXoTN1eb7AI+DntdU1vbcwGRV4SCIDxZu+YD8JP8r4E=       3.0  張信哲 (Jeff Chang)   \n",
+       "1  o0kFgae9QtnYgRkVPqLJwa05zIhRlUjfF7O1tDw0ZDU=      31.0         BLACKPINK   \n",
+       "2  DwVvVurfpuz+XPuFvucclVQEyPqcpUkHR0ne1RQzPs0=      31.0      SUPER JUNIOR   \n",
+       "\n",
+       "  Category  Length  \n",
+       "0      465  247640  \n",
+       "1      444  197328  \n",
+       "2      465  231781  "
+      ]
+     },
+     "execution_count": 140,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "# Drop irrevarent features for recommendation\n",
+    "# Rename name of columns as you like\n",
+    "\n",
+    "songs = songs[[\"song_id\", \"language\", \"artist_name\", \"genre_ids\", \"song_length\"]]\n",
+    "songs.columns = [\"SongID\", \"Language\", \"Artist\", \"Category\", \"Length\"]\n",
+    "print(songs.isnull().sum())\n",
+    "songs.head(3)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "#### I wanna drop row has null value in Language column\n",
+    "#### I wanna fix null value in Category column"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 141,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "SongID      2296320\n",
+       "Language         10\n",
+       "Artist       222363\n",
+       "Category       1045\n",
+       "Length       146534\n",
+       "dtype: int64"
+      ]
+     },
+     "execution_count": 141,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "# Songs : 2,296,320 (359,966 songs in training data)\n",
+    "# Language : 9\n",
+    "# Artist : 222,363\n",
+    "# Category : 1,044\n",
+    "\n",
+    "songs.nunique()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### Data3. members data"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 134,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "The total number of data is: 34403\n",
+      "--------------------\n",
+      "UserID        0\n",
+      "Age           0\n",
+      "Sex       19902\n",
+      "City          0\n",
+      "dtype: int64\n"
+     ]
+    },
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>UserID</th>\n",
+       "      <th>Age</th>\n",
+       "      <th>Sex</th>\n",
+       "      <th>City</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <th>0</th>\n",
+       "      <td>XQxgAYj3klVKjR3oxPPXYYFp4soD4TuBghkhMTD4oTw=</td>\n",
+       "      <td>0</td>\n",
+       "      <td>NaN</td>\n",
+       "      <td>1</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>1</th>\n",
+       "      <td>UizsfmJb9mV54qE9hCYyU07Va97c0lCRLEQX3ae+ztM=</td>\n",
+       "      <td>0</td>\n",
+       "      <td>NaN</td>\n",
+       "      <td>1</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>2</th>\n",
+       "      <td>D8nEhsIOBSoE6VthTaqDX8U6lqjJ7dLdr72mOyLya2A=</td>\n",
+       "      <td>0</td>\n",
+       "      <td>NaN</td>\n",
+       "      <td>1</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "                                         UserID  Age  Sex  City\n",
+       "0  XQxgAYj3klVKjR3oxPPXYYFp4soD4TuBghkhMTD4oTw=    0  NaN     1\n",
+       "1  UizsfmJb9mV54qE9hCYyU07Va97c0lCRLEQX3ae+ztM=    0  NaN     1\n",
+       "2  D8nEhsIOBSoE6VthTaqDX8U6lqjJ7dLdr72mOyLya2A=    0  NaN     1"
+      ]
+     },
+     "execution_count": 134,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "#Drop irrevarent features for recommendation\n",
+    "#Rename name of columns as you like\n",
+    "\n",
+    "members = members[[\"msno\", \"bd\", \"gender\", \"city\"]]\n",
+    "members.columns = [\"UserID\", \"Age\", \"Sex\", \"City\"]\n",
+    "print(\"The total number of data is:\", len(members))\n",
+    "print(\"--------------------\")\n",
+    "print(members.isnull().sum())\n",
+    "members.head(3)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# There might be so many outliers in 'Age' \n",
+    "\n",
+    "print(members.describe())\n",
+    "members.nunique()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "plt.hist(x=members.Age)\n",
+    "plt.title(\"Distribution of Age\")\n",
+    "plt.xlabel(\"Age\")\n",
+    "plt.ylabel(\"Counts\")\n",
+    "plt.grid()\n",
+    "plt.show();"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "outlier_ages = members[(members.Age < 6) | (members.Age > 95)][\"Age\"]\n",
+    "members[members[\"Age\"] == outlier_ages][\"Age\"] = np.nan\n",
+    "mean_age = round(members[members[\"Age\"] != outlier_ages][\"Age\"].mean())\n",
+    "members[\"Age\"].fillna(mean_age, inplace=True)\n",
+    "members[\"Age\"].describe"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "members.describe"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### Data4. song_extra_info data"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 148,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "SongID            0\n",
+      "SongTitle         2\n",
+      "ISRC         136548\n",
+      "dtype: int64\n"
+     ]
+    },
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>SongID</th>\n",
+       "      <th>SongTitle</th>\n",
+       "      <th>ISRC</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <th>0</th>\n",
+       "      <td>LP7pLJoJFBvyuUwvu+oLzjT+bI+UeBPURCecJsX1jjs=</td>\n",
+       "      <td>我們</td>\n",
+       "      <td>TWUM71200043</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>1</th>\n",
+       "      <td>ClazTFnk6r0Bnuie44bocdNMM3rdlrq0bCGAsGUWcHE=</td>\n",
+       "      <td>Let Me Love You</td>\n",
+       "      <td>QMZSY1600015</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>2</th>\n",
+       "      <td>u2ja/bZE3zhCGxvbbOB3zOoUjx27u40cf5g09UXMoKQ=</td>\n",
+       "      <td>原諒我</td>\n",
+       "      <td>TWA530887303</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "                                         SongID        SongTitle          ISRC\n",
+       "0  LP7pLJoJFBvyuUwvu+oLzjT+bI+UeBPURCecJsX1jjs=               我們  TWUM71200043\n",
+       "1  ClazTFnk6r0Bnuie44bocdNMM3rdlrq0bCGAsGUWcHE=  Let Me Love You  QMZSY1600015\n",
+       "2  u2ja/bZE3zhCGxvbbOB3zOoUjx27u40cf5g09UXMoKQ=              原諒我  TWA530887303"
+      ]
+     },
+     "execution_count": 148,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "# Add a few \n",
+    "\n",
+    "song_extra_info.columns = [\"SongID\", \"SongTitle\", \"ISRC\"]\n",
+    "print(song_extra_info.isnull().sum())\n",
+    "song_extra_info.head(3)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### Data5. test data"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 144,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "(2556790, 6)\n"
+     ]
+    },
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>id</th>\n",
+       "      <th>msno</th>\n",
+       "      <th>song_id</th>\n",
+       "      <th>source_system_tab</th>\n",
+       "      <th>source_screen_name</th>\n",
+       "      <th>source_type</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <th>0</th>\n",
+       "      <td>0</td>\n",
+       "      <td>V8ruy7SGk7tDm3zA51DPpn6qutt+vmKMBKa21dp54uM=</td>\n",
+       "      <td>WmHKgKMlp1lQMecNdNvDMkvIycZYHnFwDT72I5sIssc=</td>\n",
+       "      <td>my library</td>\n",
+       "      <td>Local playlist more</td>\n",
+       "      <td>local-library</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>1</th>\n",
+       "      <td>1</td>\n",
+       "      <td>V8ruy7SGk7tDm3zA51DPpn6qutt+vmKMBKa21dp54uM=</td>\n",
+       "      <td>y/rsZ9DC7FwK5F2PK2D5mj+aOBUJAjuu3dZ14NgE0vM=</td>\n",
+       "      <td>my library</td>\n",
+       "      <td>Local playlist more</td>\n",
+       "      <td>local-library</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>2</th>\n",
+       "      <td>2</td>\n",
+       "      <td>/uQAlrAkaczV+nWCd2sPF2ekvXPRipV7q0l+gbLuxjw=</td>\n",
+       "      <td>8eZLFOdGVdXBSqoAv5nsLigeH2BvKXzTQYtUM53I0k4=</td>\n",
+       "      <td>discover</td>\n",
+       "      <td>NaN</td>\n",
+       "      <td>song-based-playlist</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "   id                                          msno  \\\n",
+       "0   0  V8ruy7SGk7tDm3zA51DPpn6qutt+vmKMBKa21dp54uM=   \n",
+       "1   1  V8ruy7SGk7tDm3zA51DPpn6qutt+vmKMBKa21dp54uM=   \n",
+       "2   2  /uQAlrAkaczV+nWCd2sPF2ekvXPRipV7q0l+gbLuxjw=   \n",
+       "\n",
+       "                                        song_id source_system_tab  \\\n",
+       "0  WmHKgKMlp1lQMecNdNvDMkvIycZYHnFwDT72I5sIssc=        my library   \n",
+       "1  y/rsZ9DC7FwK5F2PK2D5mj+aOBUJAjuu3dZ14NgE0vM=        my library   \n",
+       "2  8eZLFOdGVdXBSqoAv5nsLigeH2BvKXzTQYtUM53I0k4=          discover   \n",
+       "\n",
+       "    source_screen_name          source_type  \n",
+       "0  Local playlist more        local-library  \n",
+       "1  Local playlist more        local-library  \n",
+       "2                  NaN  song-based-playlist  "
+      ]
+     },
+     "execution_count": 144,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "# Finally check the test data\n",
+    "\n",
+    "print(test.shape)\n",
+    "test.head(3)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 145,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "RowID     0\n",
+      "UserID    0\n",
+      "SongID    0\n",
+      "dtype: int64\n"
+     ]
+    },
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>RowID</th>\n",
+       "      <th>UserID</th>\n",
+       "      <th>SongID</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <th>0</th>\n",
+       "      <td>0</td>\n",
+       "      <td>V8ruy7SGk7tDm3zA51DPpn6qutt+vmKMBKa21dp54uM=</td>\n",
+       "      <td>WmHKgKMlp1lQMecNdNvDMkvIycZYHnFwDT72I5sIssc=</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>1</th>\n",
+       "      <td>1</td>\n",
+       "      <td>V8ruy7SGk7tDm3zA51DPpn6qutt+vmKMBKa21dp54uM=</td>\n",
+       "      <td>y/rsZ9DC7FwK5F2PK2D5mj+aOBUJAjuu3dZ14NgE0vM=</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>2</th>\n",
+       "      <td>2</td>\n",
+       "      <td>/uQAlrAkaczV+nWCd2sPF2ekvXPRipV7q0l+gbLuxjw=</td>\n",
+       "      <td>8eZLFOdGVdXBSqoAv5nsLigeH2BvKXzTQYtUM53I0k4=</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "   RowID                                        UserID  \\\n",
+       "0      0  V8ruy7SGk7tDm3zA51DPpn6qutt+vmKMBKa21dp54uM=   \n",
+       "1      1  V8ruy7SGk7tDm3zA51DPpn6qutt+vmKMBKa21dp54uM=   \n",
+       "2      2  /uQAlrAkaczV+nWCd2sPF2ekvXPRipV7q0l+gbLuxjw=   \n",
+       "\n",
+       "                                         SongID  \n",
+       "0  WmHKgKMlp1lQMecNdNvDMkvIycZYHnFwDT72I5sIssc=  \n",
+       "1  y/rsZ9DC7FwK5F2PK2D5mj+aOBUJAjuu3dZ14NgE0vM=  \n",
+       "2  8eZLFOdGVdXBSqoAv5nsLigeH2BvKXzTQYtUM53I0k4=  "
+      ]
+     },
+     "execution_count": 145,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "# Drop irrevarent features for recommendation\n",
+    "\n",
+    "test = test[[\"id\", \"msno\", \"song_id\"]]\n",
+    "test.columns = [\"RowID\", \"UserID\", \"SongID\"]\n",
+    "print(test.isnull().sum())\n",
+    "test.head(3)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.7.1"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 2
+}
